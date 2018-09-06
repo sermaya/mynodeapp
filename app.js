@@ -2,8 +2,7 @@
  * Created by junelee on 2018-08-30.
  */
 //mongodb://<dbuser>:<dbpassword>@ds239412.mlab.com:39412/juni_node_db
-//mongodb 접속 : mongodb://my_node_test:l10045504j@ds239412.mlab.com:39412/juni_node_db
-
+    
 var express = require("express");
 var path = require("path");
 var app = express();
