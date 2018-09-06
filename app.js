@@ -8,11 +8,12 @@ var express = require("express");
 var path = require("path");
 var app = express();
 var mongoose = require("mongoose");
+var process = require("process");
 
-var uri = "mongodb://test:test1234@ds239412.mlab.com:39412/juni_node_db";
+console.log(process.env.MONGO_DB);
 
-//몽고DB 설정
-mongoose.connect(uri, {useNewUrlParser : true});
+//몽고DB 설정 - process.env.MONGO_DB : 윈도우 환경변수에 설정
+mongoose.connect(process.env.MONGO_DB, {useNewUrlParser : true});
 var db = mongoose.connection;
 db.on("error", function(err){
     console.log("DB ERROR : ". err)
