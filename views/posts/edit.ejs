@@ -15,7 +15,7 @@
         <h3>New Post</h3>
         <form class="posts_form" action="/posts/<%= data._id%>?_method=put" method="post">
             <label>Title</label>
-            <input type="text" name="post[title]" value="<%= dsta.title%>">
+            <input type="text" name="post[title]" value="<%= data.title%>">
             <label>Body</label>
             <textarea name="post[body]"><%= data.body%></textarea>
             <button type="submit">Submit</button>
