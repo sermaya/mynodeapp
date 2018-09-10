@@ -1,107 +1,90 @@
-/**
- * Created by junelee on 2018-08-30.
- */
-//mongodb://<dbuser>:<dbpassword>@ds239412.mlab.com:39412/juni_node_db
-    
+//import modules
 var express = require("express");
-var path = require("path");
 var app = express();
+var path = require("path");
 var mongoose = require("mongoose");
-var process = require("process");
+var bodyParser = require("body-parser");
+var methodOverride = require("method-override");
 
-console.log(process.env.MONGO_DB);
-
-//몽고DB 설정 - process.env.MONGO_DB : 윈도우 환경변수에 설정
+//connect database
 mongoose.connect(process.env.MONGO_DB, {useNewUrlParser : true});
 var db = mongoose.connection;
-db.on("error", function(err){
-    console.log("DB ERROR : ". err)
-});
-
 db.once("open", function(){
     console.log("DB Connected");
 });
 
-//object를 인자로 받아 그 object를 스키마로 만든다.
-var dataSchema = mongoose.Schema({
-    name : String,
-    count : Number
-});
-
-//모델을 담는 변수는 첫글자가 대문자이다.
-var Data = mongoose.model('data', dataSchema);  //mongodb의 document객체를 만든다.
-
-Data.findOne({name:"mydata"}, function(err, data){
-    if (err) return console.log("Data Error : ", err);
-    if (!data){
-        Data.create({name:"mydata", count:0}, function(err, data){
-            if (err) return console.log("Data Error : ", err);
-            console.log("Counter Initializer : ", data);
-        });
-    }
+db.on("error", function(err){
+    console.log("DB ERROR : ". err)
 });
 
 
-//view engine setting
+//model setting
+var postSchema = mongoose.Schema({
+    title : {type:String, required:true},
+    body : {type:String, required:true},
+    createdAt : {type:Date, default:Date.now},
+    updatedAt : Date
+});
+var Post = mongoose.model('post', postSchema);
+
+//view setting
 app.set("view engine", "ejs");
-app.use(express.static(path.join(__dirname, "/public")));
 
-//var data = {count:0}
-app.get("/", function(req, res){
-    Data.findOne({name:"mydata"}, function(err, data) {
-        if(err) return console.log("Data Error : ", err);
+//set middleware
+app.use(express.static(path.join(__dirname, "/views")));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extends:true}));
+app.use(methodOverride("_method"));
 
-        console.log(data);
-
-        if (data) {
-            data.count++;
-            data.save(function (err) {
-                if (err) return console.log("Data Error : ", err);
-                res.render("my_first_ejs", data);
-            });
-        }
+//set route
+app.get('/posts', function(req, res){
+    Post.find({}).sort('-createdAt').exec(function(err, posts){
+        if (err) return res.json({success:false, message:err});
+        res.render("posts/index", {data:posts});
     });
+}); //index
+
+app.get('/posts/new', function(req, res){
+    res.render("posts/new");
 });
 
-app.get("/reset", function(req, res){
-    setCounter(res, 0);
-});
-
-app.get("/set/count", function(req, res){
-    console.log(req.query.count);
-    if(req.query.count) setCounter(res, req.query.count);
-    else getCounter(res);
-});
-
-app.get("/set/:num", function(req, res){
-    console.log(req.params);
-    if (req.params.num) setCounter(res, req.params.num);
-    else getCounter(res);
-});
-
-
-function setCounter(res, num){
-    console.log("setCounter");
-
-    Data.findOne({name:"mydata"}, function(err, data){
-        if(err) return console.log("Data error : ", err);
-        data.count = num;
-        data.save(function(err){
-            if (err) return console.log("Data Error : ", err);
-            res.render("my_first_ejs", data);
-        });
+app.post('/posts', function(req, res){
+    Post.create(req.body.post, function(err, post){
+        if (err) return res.json({success:false, message:err});
+        res.redirect("/posts");
     });
-}
+}); //create
 
-function getCounter(res){
-    console.log("getCounter");
-    Data.findOne({name:"mydata"}, function(err, data){
-        if (err) console.log("Data Error : ", err);
-        res.render("my_first_ejs", data);
+app.get('/posts/:id', function(req, res){
+    Post.findById(req.params.id, function(err, post){
+        if(err) return res.json({success:false, message:err});
+        res.render("posts/show", {data:post});
     });
-}
+}); //show
 
-console.log(__dirname);
+app.get('/posts/:id/edit', function(req, res){
+    Post.findById(req.params.id, function(err, post){
+        if(err) return res.json({success:false, message:err});
+        res.render("posts/edit", {data:post});
+    });
+}); //edit
+
+app.put('/posts/:id', function(req, res){
+    req.body.post.updatedAt = Date.now();
+    Post.findByIdAndUpdate(req.params.id, req.body.post, function(err, post){
+        if(err) return res.json({success:false, message:err});
+        res.json({success:true, message:post._id + " updated"});
+    });
+}); //update
+
+app.delete('/posts/:id', function(req, res){
+    Post.findByIdAndRemove(req.params.id, function(err, post){
+       if(err) return res.json({success:false, message:err});
+       res.redirect("/posts");
+    });
+}); //destroy
+
+//start server
 app.listen(3000, function(){
     console.log("Server On!")
 })
