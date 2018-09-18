@@ -13,11 +13,12 @@
     <!-- main start -->
     <div class="new">
         <h3>New Post</h3>
-        <form class="posts_form" action="/posts/<%= data._id%>?_method=put" method="post">
+        <form class="posts_form" action="/posts/<%= post._id%>?_method=put" method="post">
             <label>Title</label>
-            <input type="text" name="post[title]" value="<%= data.title%>">
+            <input type="text" name="post[title]" value="<%= post.title%>">
             <label>Body</label>
-            <textarea name="post[body]"><%= data.body%></textarea>
+            <textarea name="post[body]"><%= post.body%></textarea>
+            <div class="float_right">Author : <%= user.nickname%></div>
             <button type="submit">Submit</button>
         </form>
         <a href="/posts/<%= data._id%>"><button>Back</button></a>

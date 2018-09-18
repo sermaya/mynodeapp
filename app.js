@@ -22,23 +22,44 @@ db.on("error", function(err){
     console.log("DB ERROR : ". err)
 });
 
-
 //model setting
 var postSchema = mongoose.Schema({
     title : {type:String, required:true},
     body : {type:String, required:true},
+    author : {type:mongoose.Schema.Types.ObjectId, ref:'user', required:true},
     createdAt : {type:Date, default:Date.now},
     updatedAt : Date
 });
 var Post = mongoose.model('post', postSchema);
 
-
+var bcrypt = require('bcrypt-nodejs');
 var userSchema = mongoose.Schema({
     email : {type:String, required:true, unique:true},
     nickname : {type:String, required:true, unique:true},
     password : {type:String, required:true},
     createdAt : {type:Date, default:Date.now}
 });
+
+userSchema.pre('save', function (next) {
+   var user = this;
+
+   if (!user.isModified('password')){
+       return next();
+   } else {
+       user.password = bcrypt.hashSync(user.password);
+       return next();
+   }
+});
+
+userSchema.methods.authenticate = function (password) {
+    var user = this;
+    return bcrypt.compareSync(password, user.password);
+}
+
+userSchema.methods.hash = function (password) {
+    return bcrypt.hashSync(password);
+}
+
 var User = mongoose.model('user', userSchema)
 
 //view setting
@@ -85,7 +106,7 @@ passport.use('local-login',
                     return done(null, false, req.flash('loginError', 'No user found.'));
                 }
 
-                if (user.password != password){
+                if (!user.authenticate(password)){
                     req.flash('email', req.body.email);
                     return done(null, false, req.flash('loginError', 'Password does not Match.'));
                 }
@@ -98,7 +119,6 @@ passport.use('local-login',
 
 //set route
 app.get('/', function (req, res) {
-    console.log("A");
     res.redirect('/posts');
 });
 
@@ -124,57 +144,85 @@ app.post('/login',
     })
 );
 
-app.get('/logout', function(){
+app.get('/logout', function(req, res){
     req.logout();
-    req.redirect('/');
+    res.redirect('/');
 });
 
 app.get('/posts', function(req, res){
-    Post.find({}).sort('-createdAt').exec(function(err, posts){
+    Post.find({}).populate('author').sort('-createdAt').exec(function(err, posts){
         if (err) return res.json({success:false, message:err});
-        res.render("posts/index", {data:posts, user:req.user});
+        res.render("posts/index", {posts:posts, user:req.user});
     });
 }); //index
 
-
-app.get('/posts/new', function(req, res){
-    res.render("posts/new");
+app.get('/posts/new', isLoggedIn, function(req, res){
+    res.render("posts/new", {user:req.user});
 });
 
-app.post('/posts', function(req, res){
+app.post('/posts', isLoggedIn, function(req, res){
+    req.body.post.author = req.user._id;
     Post.create(req.body.post, function(err, post){
         if (err) return res.json({success:false, message:err});
-        res.redirect("/posts/index", {data:posts, user:req.user});
+        res.redirect("/posts/index", {data:post, user:req.user});
     });
 }); //create
 
 app.get('/posts/:id', function(req, res){
-    Post.findById(req.params.id, function(err, post){
+    Post.findById(req.params.id).populate('author').exec(function(err, post){
         if(err) return res.json({success:false, message:err});
-        res.render("posts/show", {data:post});
+        res.render("posts/show", {post:post, user:req.user});
     });
 }); //show
 
-app.get('/posts/:id/edit', function(req, res){
+app.get('/posts/:id/edit', isLoggedIn, function(req, res){
     Post.findById(req.params.id, function(err, post){
         if(err) return res.json({success:false, message:err});
-        res.render("posts/edit", {data:post});
+        if(!req.user._id.equals(post.author)) return res.json({success:false, message:"Unathorized Attempt"});
+        res.render("posts/edit", {post:post, user:req.user});
     });
 }); //edit
 
-app.put('/posts/:id', function(req, res){
+app.put('/posts/:id', isLoggedIn, function(req, res){
     req.body.post.updatedAt = Date.now();
-    Post.findByIdAndUpdate(req.params.id, req.body.post, function(err, post){
-        if(err) return res.json({success:false, message:err});
-        res.redirect("/posts");
+    
+    //DB 한번만 호출할 수 있도록 수정
+    Post.findOneAndUpdate({_id:req.params.id, author:req.user._id}, req.body.post, function (err, post) {
+        if (err) return res.json({success:false, message:err});
+        if (!post) return res.json({success:false, message:"No data found to update"});
+        res.redirect('/posts/' + req.params.id);
     });
+
+    /* DB 두번호출
+    Post.findById(req.params.id, function (err, post) {
+        if (err) return res.json({success:false, message:err});
+        if(!req.user._id.equals(post.author)) return res,json({success:false, message:"Unauthorized Attempt"});
+        Post.findByIdAndUpdate(req.params.id, req.body.post, function(err, post){
+            if(err) return res.json({success:false, message:err});
+            res.redirect('/posts/' + req.params.id);
+        });
+    });
+    */
 }); //update
 
-app.delete('/posts/:id', function(req, res){
-    Post.findByIdAndRemove(req.params.id, function(err, post){
-       if(err) return res.json({success:false, message:err});
-       res.redirect("/posts");
+app.delete('/posts/:id', isLoggedIn, function(req, res){
+    //DB 한번만 호출할 수 있도록 수정
+    Post.findOneAndRemove({_id:req.params.id, author:req.user._id}, function (err, post) {
+        if (err) return res.json({success:false, message:err});
+        if (!post) return res.json({success:false, message:"No data found to update"});
+        res.redirect('/posts/' + req.params.id);
     });
+
+    /* DB 두번호춯
+    Post.findById(req.params.id, function(err, post){
+        if (err) return res.json({success:false, message:err});
+        if (!req.user._id.equals(post.author)) return res.json({success:false, message:"Unathorized Attempt"});
+        Post.findByIdAndRemove(req.params.id, function(err, post) {
+            if (err) return res.json({success: false, message: err});
+            res.redirect("/posts");
+        });
+    });
+    */
 }); //destroy
 
 //set user route
@@ -194,14 +242,15 @@ app.post('/users', checkUserRegValidation, function(req, res){
     })
 });
 
-app.get('/users/:id', function (req, res) {
+app.get('/users/:id', isLoggedIn, function (req, res) {
     User.findById(req.params.id, function (err, user) {
         if (err) return res.json({success:false, message:err});
         res.render('users/show', {user:user});
     })
 });
 
-app.get('/users/:id/edit', function (req, res) {
+app.get('/users/:id/edit', isLoggedIn, function (req, res) {
+    if (req.user._id != req.param._id) return res.json({success:false, message:"Unathorized Attempt"});
    User.findById(req.params.id, function (err, user) {
       if (err) return res.json({success:false, message:err});
       res.render('users/edit', {
@@ -217,9 +266,9 @@ app.get('/users/:id/edit', function (req, res) {
 app.put('/uses/:id', function (req, res) {
    User.findById(req.params.id, req.body.user, function (err, user) {
       if (err) return res.json({success:false, message:err});
-      if (req.body.user.password == user.password){
+      if (user.authenticate(req.body.password)){
           if (req.body.user.newPassword){
-              req.body.user.password = req.body.user.newPassword;
+              req.body.user.password = user.hash(req.body.user.newPassword);
           } else {
               delete req.body.user.password;
           }
@@ -270,6 +319,14 @@ function checkUserRegValidation(req, res, next){
             }
         }
     );
+}
+
+function isLoggedIn(req, res, next){
+    if(req.isAuthenticated()){
+        return next();
+    } else {
+        res.redirect('/');
+    }
 }
 
 

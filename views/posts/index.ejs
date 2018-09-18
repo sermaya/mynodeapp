@@ -21,11 +21,15 @@
                     <a href="/users/new" class="float_right"><button>Sign Up</button></a>
                 <% }%>
                 <ul>
-                    <li class="header">Title <span>Date</span></li>
-                    <% data.forEach(function(e){ %>
+                    <li class="header">Title
+                        <span>Date</span>
+                        <span>Author</span>
+                    </li>
+                    <% posts.forEach(function(post){ %>
                     <li>
-                        <a href="/posts/<%= e._id %>"><%= e.title%></a>
-                        <span><%= e.createdAt.toLocaleDateString() %></span>
+                        <a href="/posts/<%= post._id %>"><%= post.title%></a>
+                        <span><%= post.createdAt.toLocaleDateString() %></span>
+                        <span><%= post.author.nickname%></span>
                     </li>
                     <% })%>
                 </ul>
